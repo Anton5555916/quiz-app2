@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Квиз</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{--bg:#0a0b1e;--card:#14163a;--line:#262a5c;--txt:#eef0ff;--dim:#8d92c9;--c:#00f5ff;--good:#27f59a;--bad:#ff3d71}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:radial-gradient(900px 500px at 50% -10%,#1d1f58 0%,var(--bg) 60%) fixed;color:var(--txt);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#app{max-width:520px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom))}
+h1{font-size:28px;margin:8px 0 4px;text-shadow:0 0 18px #00f5ff88}
+h2{font-size:22px;line-height:1.3;margin:10px 0 0}
+p.sub{color:var(--dim);margin:0 0 18px}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cat{background:var(--card);border:1px solid var(--c);border-radius:20px;padding:16px 14px;text-align:left;box-shadow:0 0 16px color-mix(in srgb,var(--c) 35%,transparent);transition:transform .15s}
+.cat:active{transform:scale(.96)}
+.cat .em{font-size:34px}.cat b{display:block;margin:6px 0 2px;font-size:17px}.cat small{color:var(--dim)}
+.mini{height:5px;background:#0006;border-radius:9px;margin-top:10px;overflow:hidden}.mini i{display:block;height:100%;background:var(--c);box-shadow:0 0 8px var(--c)}
+.lv{display:flex;align-items:center;justify-content:space-between;width:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:10px;font-size:17px}
+.lv.open{border-color:var(--c);box-shadow:0 0 12px color-mix(in srgb,var(--c) 30%,transparent)}
+.lv.lock{opacity:.45;cursor:default}.lv small{color:var(--dim)}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.ghost{background:#ffffff12;border-radius:12px;padding:8px 14px}
+.hearts{font-size:20px;letter-spacing:2px}.cnt{color:var(--dim);min-width:48px;text-align:right}
+.bar{height:6px;background:#0006;border-radius:9px;overflow:hidden;margin-bottom:16px}.bar i{display:block;height:100%;background:var(--c);box-shadow:0 0 10px var(--c);transition:width .4s}
+.card{background:var(--card);border:1px solid var(--c);border-radius:22px;padding:22px 18px;box-shadow:0 0 22px color-mix(in srgb,var(--c) 30%,transparent);animation:pop .35s ease}
+.tag{color:var(--c);font-size:14px}
+.opts{display:grid;gap:10px;margin-top:16px}
+.opt{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;text-align:left;font-size:17px;transition:transform .12s,background .2s,border-color .2s,box-shadow .2s;animation:pop .35s ease backwards}
+.opt:nth-child(2){animation-delay:.05s}.opt:nth-child(3){animation-delay:.1s}.opt:nth-child(4){animation-delay:.15s}
+.opt:active{transform:scale(.97)}
+.opt.good{background:#0c3d2b;border-color:var(--good);box-shadow:0 0 18px #27f59a77}
+.opt.bad{background:#451126;border-color:var(--bad);box-shadow:0 0 18px #ff3d7177}
+.shake{animation:shake .45s}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-10px)}40%{transform:translateX(9px)}60%{transform:translateX(-6px)}80%{transform:translateX(4px)}}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+.res{text-align:center;padding-top:20px}.res .big{font-size:64px;font-weight:800;color:var(--c);text-shadow:0 0 24px var(--c)}
+.btn{display:block;width:100%;border-radius:16px;padding:15px;font-size:17px;margin-top:10px;background:var(--card);border:1px solid var(--line)}
+.neon{background:linear-gradient(90deg,#00c8ff,#8a5cff);border:0;font-weight:700;box-shadow:0 0 20px #8a5cff77}
+.share{border-color:#ff2bd6;box-shadow:0 0 14px #ff2bd655}
+#confetti{position:fixed;inset:0;pointer-events:none;z-index:50}
+.modal{position:fixed;inset:0;background:#000b;display:flex;align-items:center;justify-content:center;padding:20px;z-index:100}
+.hidden{display:none}
+.mbox{background:var(--card);border:1px solid #ff2bd6;border-radius:24px;padding:24px;width:100%;max-width:420px;text-align:center;box-shadow:0 0 30px #ff2bd655;animation:pop .3s}
+.mbox .big{font-size:56px}.mbox p{color:var(--dim)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div id="app"></div>
+<div id="modal" class="modal hidden"></div>
+
+<script>
+/* ================== НАСТРОЙКИ ================== */
+const BOT_LINK = "https://t.me/YOUR_BOT_USERNAME/app"; // ЗАМЕНИ на ссылку своего бота / Mini App
+const LIVES = 3;        // жизней на попытку уровня
+const PASS_RATIO = 0.6; // 12 из 20 = 60% для открытия следующего уровня
+const AD_SECONDS = 3;   // длительность имитации рекламы
+const PER_LEVEL = 20;   // вопросов в уровне
+const LEVELS = 5;
+
+/* ================== TELEGRAM ================== */
+const tg = window.Telegram && Telegram.WebApp;
+if (tg) { try { tg.ready(); tg.expand(); tg.setHeaderColor("#0a0b1e"); tg.setBackgroundColor("#0a0b1e"); } catch (e) {} }
+const haptic = t => { try { tg.HapticFeedback.notificationOccurred(t); } catch (e) {} };
+const tap = () => { try { tg.HapticFeedback.impactOccurred("light"); } catch (e) {} };
+
+/* ================== ВОПРОСЫ ==================
+Формат: ["Вопрос", "ПРАВИЛЬНЫЙ ответ", "неверный 1", "неверный 2", "неверный 3"]
+Порядок ответов на экране перемешивается автоматически. */
+
+// Заглушка для уровней 2–5. Когда добавишь настоящие вопросы, удали строку ...STUB
+const STUB = [
+  ["Тест: сколько будет 2 + 2?", "4", "3", "5", "6"],
+  ["Тест: какого цвета небо днём?", "Голубого", "Зелёного", "Красного", "Чёрного"],
+  ["Тест: сколько дней в неделе?", "7", "5", "6", "8"]
+];
+
+const CATS = [
+{ id: "str", name: "СНГ стримеры", emoji: "🎮", color: "#b388ff", levels: [
+  [ // УРОВЕНЬ 1
+    ["Какая стриминговая платформа с зелёным логотипом появилась в 2022 году как конкурент Twitch?", "Kick", "Trovo", "Rumble", "DLive"],
+    ["Как называется перенаправление зрителей на канал другого стримера в конце эфира?", "Рейд", "Кринж", "Реролл", "Спойлер"],
+    ["Какой сервис в СНГ чаще всего показывает донаты зрителей прямо в эфире?", "DonationAlerts", "Patreon", "Kickstarter", "PayPal"],
+    ["Какая бесплатная программа с открытым кодом чаще всего нужна для запуска стрима?", "OBS Studio", "Photoshop", "Premiere Pro", "Audacity"],
+    ["Какой смайл с лицом сотрудника Justin.tv стал символом Twitch?", "Kappa", "PogChamp", "LUL", "KEKW"],
+    ["Сколько уровней у платной подписки на Twitch?", "Три", "Два", "Четыре", "Пять"],
+    ["Какая компания купила Twitch в 2014 году?", "Amazon", "Google", "Microsoft", "Sony"],
+    ["Кто из этих стримеров лидирует среди русскоязычных Twitch-каналов по числу фолловеров (данные 2026 года)?", "Buster", "Bratishkinoff", "Zubarefff", "Deepins02"],
+    ["Какой украинский киберспортсмен, чемпион The International 2011 в составе Na'Vi, стримит на Twitch?", "Dendi", "s1mple", "Kuro", "Miracle"],
+    ["Какую африканскую гору покорили в прямом эфире стримеры Leva2k и Rostislav999?", "Килиманджаро", "Кения", "Эльгон", "Рувензори"],
+    ["Как называется короткий яркий момент эфира, который зритель вырезает и пересылает друзьям?", "Клип", "Тизер", "Реролл", "Спойлер"],
+    ["Из какой игры пошёл мем «Press F to pay respects»?", "Call of Duty: Advanced Warfare", "Battlefield 3", "Halo 5", "Dark Souls"],
+    ["Что означает IRL в стриминге?", "Трансляция из реальной жизни", "Режим повтора", "Эфир с рекламой", "Игра на выживание"],
+    ["Что такое VOD на Twitch?", "Запись прошедшего эфира", "Платная подписка", "Награда за рейд", "Чат для модераторов"],
+    ["Какую долю платных подписок оставляет стримеру Kick по заявленной модели?", "95%", "50%", "70%", "100%"],
+    ["Что зрители копят за просмотр на Twitch и тратят на награды канала?", "Баллы канала", "Биты", "Золото", "Кристаллы"],
+    ["В какой игре Ninja стал мировой звездой Twitch?", "Fortnite", "Minecraft", "Dota 2", "Among Us"],
+    ["Как называется виртуальная валюта Twitch, которой зрители «болеют» за стримера в чате?", "Биты", "Коины", "Токены", "Звёзды"],
+    ["Какая игра про предателей на космическом корабле стала хитом стримов в 2020 году?", "Among Us", "Fall Guys", "Phasmophobia", "Rust"],
+    ["Как называется одновременная трансляция сразу на несколько платформ?", "Мультистриминг", "Кроссфейд", "Дублирование", "Хостинг"]
+  ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 2
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 3
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 4
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 5
+    ...STUB ]
+]},
+{ id: "yt", name: "Ютуберы", emoji: "📹", color: "#ff4d5e", levels: [
+  [ // УРОВЕНЬ 1
+    ["Какой ютубер в 2024 году обогнал T-Series и стал самым подписываемым каналом?", "MrBeast", "PewDiePie", "Dude Perfect", "Markiplier"],
+    ["Как на самом деле зовут MrBeast?", "Джимми Дональдсон", "Джейк Пол", "Логан Пол", "Феликс Кьельберг"],
+    ["Из какой страны PewDiePie?", "Из Швеции", "Из Норвегии", "Из Дании", "Из Финляндии"],
+    ["Кто ведёт YouTube-шоу «вДудь»?", "Юрий Дудь", "Иван Ургант", "Данила Поперечный", "Эльдар Джарахов"],
+    ["Что такое «коллаб» у блогеров?", "Совместный ролик нескольких авторов", "Удаление ролика", "Платная подписка", "Прямой эфир"],
+    ["Какой ютубер-майнкрафтер умер в 2022 году, а фраза «never dies» стала мемом?", "Technoblade", "Dream", "TommyInnit", "Wilbur Soot"],
+    ["В каком году появился YouTube?", "В 2005", "В 2003", "В 2007", "В 2009"],
+    ["Какие животные в самом первом видео на YouTube «Me at the zoo»?", "Слоны", "Жирафы", "Пингвины", "Львы"],
+    ["Какая компания купила YouTube в 2006 году?", "Google", "Microsoft", "Yahoo", "Facebook"],
+    ["Какую награду YouTube выдаёт за 100 000 подписчиков?", "Серебряную кнопку", "Золотую кнопку", "Бронзовую кнопку", "Алмазную кнопку"],
+    ["Какую награду YouTube выдаёт за 10 миллионов подписчиков?", "Бриллиантовую кнопку", "Золотую кнопку", "Платиновую кнопку", "Рубиновую кнопку"],
+    ["Какой челлендж 2014 года собирал деньги на исследования бокового амиотрофического склероза?", "Ice Bucket Challenge", "Mannequin Challenge", "Planking", "Harlem Shake"],
+    ["Чей клип «Gangnam Style» первым набрал миллиард просмотров на YouTube?", "PSY", "BTS", "Justin Bieber", "Rihanna"],
+    ["Какое видео первым набрало 10 миллиардов просмотров на YouTube?", "Baby Shark Dance", "Despacito", "See You Again", "Shape of You"],
+    ["Какое шоу MrBeast воссоздало «Игру в кальмара» с призом 456 000 долларов?", "Squid Game в реальной жизни", "Last to Leave", "Beast Games", "Ночь в музее"],
+    ["Какой ролик YouTube 2018 года стал самым дизлайкнутым в истории платформы?", "YouTube Rewind 2018", "Baby Shark", "Friday", "Despacito"],
+    ["В каком году вышел последний YouTube Rewind?", "В 2019", "В 2017", "В 2021", "В 2015"],
+    ["Как называется вертикальный короткий формат видео на YouTube?", "Shorts", "Stories", "Reels", "Clips"],
+    ["Как называют видео, где блогер впервые открывает и разглядывает посылку?", "Анбоксинг", "Реакция", "Влог", "Летсплей"],
+    ["Что такое «кликбейт»?", "Завлекающий заголовок или превью, не совпадающие с содержанием", "Платная реклама", "Комментарий автора", "Запись стрима"]
+  ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 2
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 3
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 4
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 5
+    ...STUB ]
+]},
+{ id: "cin", name: "Мировое кино и сериалы", emoji: "🎬", color: "#ffd23f", levels: [
+  [ // УРОВЕНЬ 1
+    ["Какой фильм Джеймса Кэмерона (2009) считается самым кассовым в истории?", "Аватар", "Титаник", "Терминатор 2", "Чужие"],
+    ["Как называется приквел «Игры престолов» от HBO, вышедший в 2022 году?", "Дом дракона", "Рим", "Ведьмак", "Тёмные начала"],
+    ["Из какой страны сериал «Игра в кальмара»?", "Из Южной Кореи", "Из Японии", "Из Китая", "Из США"],
+    ["Какой фильм получил «Оскар» как лучший фильм 2024 года?", "Оппенгеймер", "Барби", "Бедные-несчастные", "Убийцы цветочной луны"],
+    ["Каким псевдонимом пользуется Уолтер Уайт в сериале «Во все тяжкие»?", "Хайзенберг", "Фринг", "Сол", "Эйнштейн"],
+    ["Как называется вымышленный город в сериале «Очень странные дела»?", "Хокинс", "Сайлент-Хилл", "Твин-Пикс", "Ривердейл"],
+    ["Какую таблетку выбирает Нео в «Матрице», чтобы узнать правду?", "Красную", "Синюю", "Зелёную", "Белую"],
+    ["Сколько «Оскаров» получил «Титаник» (1997)?", "11", "9", "7", "14"],
+    ["Кто снял трилогию «Властелин колец»?", "Питер Джексон", "Стивен Спилберг", "Джордж Лукас", "Тим Бёртон"],
+    ["Кто получил «Оскар» за главную роль в «Джокере» (2019)?", "Хоакин Феникс", "Хит Леджер", "Джаред Лето", "Леонардо ДиКаприо"],
+    ["Под каким номером играет главный герой «Игры в кальмара»?", "456", "001", "218", "067"],
+    ["Кто сыграл Шерлока Холмса в сериале BBC «Шерлок»?", "Бенедикт Камбербэтч", "Роберт Дауни-младший", "Том Хиддлстон", "Эдди Редмэйн"],
+    ["Как называется кофейня в сериале «Друзья»?", "Central Perk", "Starbucks", "MacLaren's", "Luke's Diner"],
+    ["Сколько раз Шелдон стучит в дверь в «Теории большого взрыва»?", "Три", "Два", "Пять", "Семь"],
+    ["В каком году вышел первый фильм «Звёздные войны»?", "В 1977", "В 1983", "В 1969", "В 1991"],
+    ["Кто написал музыку к «Интерстеллару» и «Дюне» (2021)?", "Ханс Циммер", "Джон Уильямс", "Говард Шор", "Эннио Морриконе"],
+    ["Кто играет Уэнсдей Аддамс в сериале Netflix 2022 года?", "Дженна Ортега", "Милли Бобби Браун", "Зендея", "Эмма Мьерс"],
+    ["Как назвали феномен одновременного выхода «Барби» и «Оппенгеймера» в 2023 году?", "Барбенгеймер", "Оппенбарби", "Кенгеймер", "Баррихаймер"],
+    ["Как зовут «малыша Йоду» из сериала «Мандалорец»?", "Грогу", "Йода", "Чубакка", "Дин Джарин"],
+    ["Какой фильм Marvel 2019 года ненадолго обогнал «Аватар» по сборам?", "Мстители: Финал", "Мстители: Война бесконечности", "Капитан Марвел", "Человек-паук: Вдали от дома"]
+  ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 2
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 3
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 4
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 5
+    ...STUB ]
+]},
+{ id: "mus", name: "Мировая музыка", emoji: "🎵", color: "#2bff9e", levels: [
+  [ // УРОВЕНЬ 1
+    ["Какая группа выпустила песню «Bohemian Rhapsody»?", "Queen", "Led Zeppelin", "The Beatles", "Pink Floyd"],
+    ["Какой альбом считается самым продаваемым в истории?", "Thriller Майкла Джексона", "Back in Black AC/DC", "21 Адель", "Rumours Fleetwood Mac"],
+    ["Как называется тур Тейлор Свифт 2023–2024 годов, ставший рекордным по сборам?", "The Eras Tour", "Reputation Tour", "Lover Fest", "1989 World Tour"],
+    ["Из какой страны исполнители хита «Despacito»?", "Из Пуэрто-Рико", "Из Мексики", "Из Испании", "Из Аргентины"],
+    ["Какая группа исполнила «Smells Like Teen Spirit»?", "Nirvana", "Pearl Jam", "Soundgarden", "Metallica"],
+    ["Кто исполнил хит «Blinding Lights»?", "The Weeknd", "Drake", "Post Malone", "Bruno Mars"],
+    ["Какая певица выпустила визуальный альбом «Lemonade» (2016)?", "Бейонсе", "Рианна", "Леди Гага", "Адель"],
+    ["Как называют фанатов южнокорейской группы BTS?", "ARMY", "Swifties", "Beliebers", "BLINKs"],
+    ["Что изображено на обложке альбома «Nevermind» группы Nirvana?", "Плавающий под водой младенец", "Горящий дом", "Призма", "Чёрная кошка"],
+    ["Что изображено на обложке альбома «The Dark Side of the Moon»?", "Призма, преломляющая свет", "Лунный пейзаж", "Лицо астронавта", "Тёмная комната"],
+    ["Какая песня стала первой рэп-композицией, получившей «Оскар»?", "Lose Yourself", "Stan", "Mockingbird", "Without Me"],
+    ["Какой рэпер получил Пулитцеровскую премию за альбом DAMN. в 2018 году?", "Кендрик Ламар", "Дрейк", "Джей Зи", "Канье Уэст"],
+    ["Какая певица выпустила альбомы «19», «21», «25» и «30»?", "Адель", "Билли Айлиш", "Дуа Липа", "Селена Гомес"],
+    ["Как на самом деле зовут Леди Гагу?", "Стефани Джерманотта", "Эмили Блант", "Скарлетт Йоханссон", "Мэдисон Бир"],
+    ["Какая группа записала «Hotel California»?", "Eagles", "Fleetwood Mac", "The Doors", "Journey"],
+    ["В какой стране основан Spotify?", "В Швеции", "В США", "В Великобритании", "В Германии"],
+    ["Из какой страны электронный дуэт Daft Punk?", "Из Франции", "Из Германии", "Из Швеции", "Из США"],
+    ["Какая соцсеть сильнее всего влияет на появление новых хитов в последние годы?", "TikTok", "LinkedIn", "Pinterest", "Telegram"],
+    ["Кто получил «Грэмми» в категории «Альбом года» 2024 за «Midnights»?", "Тейлор Свифт", "Оливия Родриго", "Билли Айлиш", "SZA"],
+    ["В каком британском городе сформировалась группа The Beatles?", "В Ливерпуле", "В Лондоне", "В Манчестере", "В Бирмингеме"]
+  ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 2
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 3
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 4
+    ...STUB ],
+  [ // СЮДА ДОБАВИТЬ ВОПРОСЫ ДЛЯ УРОВНЯ 5
+    ...STUB ]
+]}
+];
+
+/* ================== ПРОГРЕСС ================== */
+const KEY = "quiz_progress_v1";
+let P = {};
+try { P = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { P = {}; }
+CATS.forEach(c => { P[c.id] = P[c.id] || { unlocked: 1, best: {} }; });
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) {} };
+
+/* ================== УТИЛИТЫ ================== */
+const $ = s => document.querySelector(s);
+const app = $("#app");
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+let S = null; // состояние игры
+
+/* ================== ЭКРАНЫ ================== */
+function menu() {
+  S = null;
+  app.innerHTML = `<h1>Квиз-арена</h1><p class="sub">Выбери категорию</p><div class="grid">` +
+    CATS.map((c, i) => `<button class="cat" style="--c:${c.color}" onclick="openCat(${i})">
+      <span class="em">${c.emoji}</span><b>${c.name}</b>
+      <small>Уровень ${P[c.id].unlocked} из ${LEVELS}</small>
+      <div class="mini"><i style="width:${(P[c.id].unlocked - 1) / LEVELS * 100}%"></i></div></button>`).join("") + `</div>`;
+}
+
+function openCat(ci) {
+  tap();
+  const c = CATS[ci], p = P[c.id];
+  app.innerHTML = `<div class="top"><button class="ghost" onclick="menu()">← Назад</button></div>
+    <h1 style="color:${c.color}">${c.emoji} ${c.name}</h1><p class="sub">Набери ${Math.round(PASS_RATIO * 100)}% и откроешь следующий уровень</p>` +
+    c.levels.map((q, i) => {
+      const n = i + 1, open = n <= p.unlocked, best = p.best[n];
+      return `<button class="lv ${open ? "open" : "lock"}" style="--c:${c.color}" ${open ? `onclick="startLevel(${ci},${n})"` : ""}>
+        <span>${open ? "▶" : "🔒"} Уровень ${n}</span><small>${best != null ? "Лучший: " + best + "/" + Math.min(PER_LEVEL, q.length) : open ? "Не пройден" : "Закрыт"}</small></button>`;
+    }).join("");
+}
+
+function startLevel(ci, lvl) {
+  tap();
+  const c = CATS[ci];
+  const qs = shuffle(c.levels[lvl - 1]).slice(0, PER_LEVEL).map(r => ({
+    t: r[0], o: shuffle([{ t: r[1], ok: true }, { t: r[2] }, { t: r[3] }, { t: r[4] }])
+  }));
+  S = { ci, lvl, qs, i: 0, score: 0, lives: LIVES, lock: false };
+  showQ();
+}
+
+const hearts = () => "❤️".repeat(S.lives) + "🖤".repeat(LIVES - S.lives);
+
+function showQ() {
+  const c = CATS[S.ci], q = S.qs[S.i];
+  app.innerHTML = `<div style="--c:${c.color}">
+    <div class="top"><button class="ghost" onclick="quit()">✕</button><div class="hearts">${hearts()}</div><div class="cnt">${S.i + 1}/${S.qs.length}</div></div>
+    <div class="bar"><i style="width:${S.i / S.qs.length * 100}%"></i></div>
+    <div class="card" id="card"><div class="tag">${c.emoji} ${c.name}, уровень ${S.lvl}</div><h2>${q.t}</h2></div>
+    <div class="opts">${q.o.map((o, k) => `<button class="opt" onclick="pick(${k})">${o.t}</button>`).join("")}</div></div>`;
+}
+
+function pick(k) {
+  if (S.lock) return;
+  S.lock = true;
+  const q = S.qs[S.i], btns = [...document.querySelectorAll(".opt")];
+  if (q.o[k].ok) {
+    btns[k].classList.add("good"); S.score++; haptic("success");
+    setTimeout(next, 750);
+  } else {
+    btns[k].classList.add("bad");
+    btns[q.o.findIndex(o => o.ok)].classList.add("good");
+    $("#card").classList.add("shake");
+    haptic("error");
+    S.lives--;
+    $(".hearts").innerHTML = hearts();
+    setTimeout(() => (S.lives <= 0 ? noLives() : next()), 1100);
+  }
+}
+
+function next() {
+  S.i++; S.lock = false;
+  S.i >= S.qs.length ? finish() : showQ();
+}
+
+function quit() { if (confirm("Выйти? Прогресс уровня не сохранится.")) openCat(S.ci); }
+
+/* ================== МОДАЛКИ И РЕКЛАМА ================== */
+const openModal = h => { const m = $("#modal"); m.innerHTML = h; m.classList.remove("hidden"); };
+const closeModal = () => $("#modal").classList.add("hidden");
+
+function noLives() {
+  openModal(`<div class="mbox"><div class="big">💔</div><h2>Жизни закончились</h2><p>Угадано: ${S.score} из ${S.qs.length}</p>
+    <button class="btn neon" onclick="watchAd()">📺 Восстановить 1 жизнь за просмотр рекламы</button>
+    <button class="btn" onclick="closeModal();finish()">Завершить уровень</button></div>`);
+}
+
+function watchAd() {
+  let t = AD_SECONDS;
+  openModal(`<div class="mbox"><div class="big" id="adt">${t}</div><h2>Реклама</h2><p>Имитация просмотра…</p></div>`);
+  // ЗДЕСЬ ВСТАВИТЬ КОД РЕКЛАМНОЙ СЕТИ
+  // После успешного просмотра рекламы нужно вызвать adRewarded()
+  const iv = setInterval(() => {
+    t--;
+    const e = $("#adt"); if (e) e.textContent = t;
+    if (t <= 0) { clearInterval(iv); adRewarded(); }
+  }, 1000);
+}
+
+function adRewarded() {
+  closeModal(); S.lives = 1; haptic("success"); next();
+}
+
+/* ================== ФИНАЛ УРОВНЯ ================== */
+function finish() {
+  const c = CATS[S.ci], p = P[c.id], total = S.qs.length, need = Math.ceil(total * PASS_RATIO);
+  const ok = S.score >= need, last = S.lvl === LEVELS;
+  p.best[S.lvl] = Math.max(p.best[S.lvl] || 0, S.score);
+  if (ok && !last && p.unlocked <= S.lvl) p.unlocked = S.lvl + 1;
+  save();
+  S.total = total;
+  app.innerHTML = `<div class="res" style="--c:${c.color}">
+    <div style="font-size:54px">${ok ? "🏆" : "😅"}</div>
+    <h2>${ok ? (last ? "Категория пройдена!" : "Уровень пройден!") : "Не хватило совсем чуть-чуть"}</h2>
+    <div class="big">${S.score}/${total}</div>
+    <p class="sub">${ok ? (last ? "Ты прошёл все уровни категории" : "Следующий уровень открыт") : "Нужно минимум " + need + " правильных ответов"}</p>
+    ${ok && !last ? `<button class="btn neon" onclick="startLevel(${S.ci},${S.lvl + 1})">Следующий уровень</button>` : ""}
+    <button class="btn" onclick="startLevel(${S.ci},${S.lvl})">Заново</button>
+    <button class="btn share" onclick="challenge()">🔥 Бросить вызов другу</button>
+    <button class="btn" onclick="openCat(${S.ci})">К уровням</button></div>`;
+  if (ok) { haptic("success"); confetti(); } else haptic("warning");
+}
+
+function challenge() {
+  const c = CATS[S.ci];
+  const text = `Я прошел ${S.lvl} уровень в категории "${c.name}" и набрал ${S.score}/${S.total}! Сможешь повторить?`;
+  const url = "https://t.me/share/url?url=" + encodeURIComponent(BOT_LINK) + "&text=" + encodeURIComponent(text);
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, "_blank");
+}
+
+/* ================== КОНФЕТТИ ================== */
+function confetti() {
+  const cv = $("#confetti"), x = cv.getContext("2d");
+  cv.width = innerWidth; cv.height = innerHeight;
+  const cols = ["#00f5ff", "#ff2bd6", "#b6ff3b", "#ffd23f", "#8a5cff"];
+  const ps = Array.from({ length: 150 }, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * .6, r: 4 + Math.random() * 6,
+    c: cols[Math.random() * 5 | 0], vx: -2 + Math.random() * 4, vy: 2 + Math.random() * 4, a: Math.random() * 6, va: -.2 + Math.random() * .4
+  }));
+  let f = 0;
+  (function loop() {
+    x.clearRect(0, 0, cv.width, cv.height);
+    ps.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.a += p.va;
+      x.save(); x.translate(p.x, p.y); x.rotate(p.a); x.fillStyle = p.c; x.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); x.restore();
+    });
+    if (++f < 220) requestAnimationFrame(loop); else x.clearRect(0, 0, cv.width, cv.height);
+  })();
+}
+
+menu();
+</script>
+</body>
+</html>
